@@ -49,6 +49,18 @@ CREATE OR REPLACE FUNCTION is_private(addr inet) RETURNS boolean AS $$
         OR addr << inet '192.168.0.0/16';
 $$ LANGUAGE sql IMMUTABLE;
 
+-- Auto-migrate away from the pre-fold layout (src_ip/dst_ip columns): drop the
+-- stale table so the new definition below can be created. Runs only when the
+-- old column is present, so it is a no-op on fresh and already-migrated DBs.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'flows_hourly' AND column_name = 'src_ip') THEN
+        DROP TABLE flows_hourly CASCADE;
+        DELETE FROM agg_state WHERE name = 'hourly';
+    END IF;
+END $$;
+
 -- Hourly aggregates: partitioned by month, 6-month retention. Main analysis table.
 -- One row per connection: both NetFlow directions are folded onto the LAN
 -- endpoint (device_ip) talking to the external endpoint (remote_ip).

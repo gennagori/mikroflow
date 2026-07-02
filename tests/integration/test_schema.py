@@ -16,3 +16,25 @@ def test_view_is_queryable(pool):
     with pool.connection() as conn:
         rows = conn.execute("SELECT * FROM v_connections").fetchall()
     assert rows == []
+
+
+def test_migrates_legacy_flows_hourly(pool):
+    from mikroflow.db import apply_schema
+
+    with pool.connection() as conn:
+        conn.execute("DROP TABLE IF EXISTS flows_hourly CASCADE")
+        conn.execute(
+            "CREATE TABLE flows_hourly (hour timestamptz NOT NULL, "
+            "src_ip inet NOT NULL, dst_ip inet NOT NULL) PARTITION BY RANGE (hour)"
+        )
+    apply_schema(pool)  # DO-block should drop the legacy table and recreate it
+    with pool.connection() as conn:
+        cols = {
+            r[0]
+            for r in conn.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'flows_hourly'"
+            ).fetchall()
+        }
+    assert "device_ip" in cols
+    assert "src_ip" not in cols
