@@ -27,6 +27,11 @@ def build_scheduler(pool, s):
 
 
 def main():
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     s = get_settings()
     pool = make_pool(s.db_dsn)
     apply_schema(pool)

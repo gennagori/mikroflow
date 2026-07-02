@@ -1,3 +1,4 @@
+import logging
 import queue
 import signal
 
@@ -7,9 +8,17 @@ from mikroflow.config import get_settings
 from mikroflow.db import apply_schema, ensure_partitions, make_pool
 from mikroflow.sinks import PostgresFlowSink
 
+log = logging.getLogger("mikroflow.collector")
+
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     s = get_settings()
+    log.info("starting collector: netflow=%s:%s db=%s",
+             s.netflow_host, s.netflow_port, s.db_dsn.split("@")[-1])
     pool = make_pool(s.db_dsn)
     apply_schema(pool)
     ensure_partitions(pool, s.partition_days_ahead, s.partition_months_ahead)
