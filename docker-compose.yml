@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mikroflow
+      POSTGRES_PASSWORD: mikroflow
+      POSTGRES_DB: mikroflow
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mikroflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  collector:
+    build: .
+    command: python -m mikroflow.collector.main
+    env_file: .env
+    environment:
+      MIKROFLOW_DB_DSN: postgresql://mikroflow:mikroflow@postgres:5432/mikroflow
+    ports:
+      - "2055:2055/udp"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: python -m mikroflow.worker.main
+    env_file: .env
+    environment:
+      MIKROFLOW_DB_DSN: postgresql://mikroflow:mikroflow@postgres:5432/mikroflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

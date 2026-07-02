@@ -570,12 +570,14 @@ DECLARE
     cutoff_raw    date := current_date - raw_days;
     cutoff_hourly date := date_trunc('month', current_date - hourly_days)::date;
 BEGIN
-    FOR r IN SELECT relname FROM pg_class WHERE relname LIKE 'flows_raw_2%' LOOP
+    FOR r IN SELECT relname FROM pg_class
+             WHERE relkind = 'r' AND relname ~ '^flows_raw_[0-9]{8}$' LOOP
         IF to_date(right(r.relname, 8), 'YYYYMMDD') < cutoff_raw THEN
             EXECUTE format('DROP TABLE IF EXISTS %I', r.relname);
         END IF;
     END LOOP;
-    FOR r IN SELECT relname FROM pg_class WHERE relname LIKE 'flows_hourly_2%' LOOP
+    FOR r IN SELECT relname FROM pg_class
+             WHERE relkind = 'r' AND relname ~ '^flows_hourly_[0-9]{6}$' LOOP
         IF to_date(right(r.relname, 6) || '01', 'YYYYMMDD') < cutoff_hourly THEN
             EXECUTE format('DROP TABLE IF EXISTS %I', r.relname);
         END IF;
@@ -802,12 +804,12 @@ class BatchWriter(threading.Thread):
         self._sink = sink
         self._batch_size = batch_size
         self._flush_seconds = flush_seconds
-        self._stop = threading.Event()
+        self._stop_event = threading.Event()
 
     def run(self) -> None:
         buf = []
         last = time.monotonic()
-        while not self._stop.is_set() or not self._queue.empty():
+        while not self._stop_event.is_set() or not self._queue.empty():
             timeout = max(0.0, self._flush_seconds - (time.monotonic() - last))
             try:
                 buf.append(self._queue.get(timeout=timeout))
@@ -822,7 +824,7 @@ class BatchWriter(threading.Thread):
             self._sink.write_batch(buf)
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stop_event.set()
 ```
 
 - [ ] **Step 4: Run unit test to verify it passes**
@@ -848,7 +850,7 @@ class UdpReceiver(threading.Thread):
         self._recv_buffer_bytes = recv_buffer_bytes
         self._queue = out_queue
         self._store = store or TemplateStore()
-        self._stop = threading.Event()
+        self._stop_event = threading.Event()
 
     def _make_socket(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -863,7 +865,7 @@ class UdpReceiver(threading.Thread):
     def run(self) -> None:
         sock = self._make_socket()
         try:
-            while not self._stop.is_set():
+            while not self._stop_event.is_set():
                 try:
                     data, addr = sock.recvfrom(65535)
                 except socket.timeout:
@@ -877,7 +879,7 @@ class UdpReceiver(threading.Thread):
             sock.close()
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stop_event.set()
 ```
 
 - [ ] **Step 6: Create `src/mikroflow/collector/main.py`**
