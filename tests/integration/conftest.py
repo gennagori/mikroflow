@@ -18,7 +18,8 @@ def pool(pg_container):
     ensure_partitions(p, 3, 2)
     with p.connection() as conn:
         conn.execute(
-            "TRUNCATE flows_raw, dhcp_leases, ip_domain, flows_hourly, agg_state"
+            "TRUNCATE flows_raw, dhcp_leases, arp, device_alias, ip_domain, "
+            "flows_hourly, agg_state"
         )
     yield p
     p.close()

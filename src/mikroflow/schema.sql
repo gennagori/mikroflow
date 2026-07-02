@@ -33,6 +33,13 @@ CREATE TABLE IF NOT EXISTS arp (
     updated_at timestamptz NOT NULL
 );
 
+-- Manual MAC -> human-friendly name overrides (static hosts, servers). Filled
+-- by hand; takes priority over the DHCP hostname. Matched case-insensitively.
+CREATE TABLE IF NOT EXISTS device_alias (
+    mac  text PRIMARY KEY,
+    name text NOT NULL
+);
+
 -- Reverse-DNS cache.
 CREATE TABLE IF NOT EXISTS ip_domain (
     ip          inet PRIMARY KEY,

@@ -7,7 +7,7 @@ INSERT INTO flows_hourly
 SELECT
     date_trunc('hour', o.ts) AS hour,
     o.device_ip,
-    l.hostname,
+    coalesce(al.name, l.hostname) AS device_name,
     coalesce(l.mac, a.mac) AS mac,
     o.remote_ip,
     d.domain,
@@ -48,8 +48,9 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) l ON true
 LEFT JOIN arp a ON a.ip = o.device_ip
+LEFT JOIN device_alias al ON upper(al.mac) = upper(coalesce(l.mac, a.mac))
 LEFT JOIN ip_domain d ON d.ip = o.remote_ip
-GROUP BY 1, o.device_ip, l.hostname, l.mac, a.mac, o.remote_ip, d.domain,
+GROUP BY 1, o.device_ip, al.name, l.hostname, l.mac, a.mac, o.remote_ip, d.domain,
          o.remote_port, o.protocol
 ON CONFLICT (hour, device_ip, remote_ip, remote_port, protocol) DO UPDATE
 SET device_name   = EXCLUDED.device_name,
