@@ -131,11 +131,15 @@ docker compose exec postgres psql -U mikroflow \
   -c "SELECT * FROM v_connections ORDER BY bytes DESC LIMIT 20;"
 ```
 
-Пример аналитического запроса:
+Каждая строка `v_connections` — одно соединение (оба направления NetFlow
+свёрнуты на LAN-устройство): `device_name`/`mac`/`device_ip` — локальный хост,
+`remote_domain`/`remote_ip`/`remote_port` — с кем связь, `bytes` — суммарно в
+обе стороны. Время `hour` хранится в UTC (в клиенте показывается в твоём
+часовом поясе).
 
 ```sql
-SELECT hour, device_name, src_ip, dst_domain, dst_ip, dst_port,
-       bytes, flow_count
+SELECT hour, device_name, mac, device_ip, remote_domain, remote_ip,
+       remote_port, bytes, flow_count
 FROM v_connections
 WHERE hour >= now() - interval '7 days'
 ORDER BY bytes DESC

@@ -25,9 +25,13 @@ docker compose up -d --build
 
 Query the `v_connections` view:
 
+Each row is one connection (both NetFlow directions folded onto the LAN
+device): `device_name`/`mac`/`device_ip` is the local host, `remote_domain`/
+`remote_ip`/`remote_port` is who it talked to, `bytes` counts both directions.
+
 ```sql
-SELECT hour, device_name, src_ip, dst_domain, dst_ip, dst_port,
-       bytes, flow_count
+SELECT hour, device_name, mac, device_ip, remote_domain, remote_ip,
+       remote_port, bytes, flow_count
 FROM v_connections
 WHERE hour >= now() - interval '7 days'
 ORDER BY bytes DESC

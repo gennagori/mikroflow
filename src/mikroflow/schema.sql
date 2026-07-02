@@ -35,24 +35,30 @@ CREATE TABLE IF NOT EXISTS ip_domain (
     ttl         integer     NOT NULL
 );
 
--- Hourly aggregates: partitioned by month, 6-month retention. Main analysis table.
-CREATE TABLE IF NOT EXISTS flows_hourly (
-    hour        timestamptz NOT NULL,
-    src_ip      inet        NOT NULL,
-    device_name text,
-    mac         text,
-    dst_ip      inet        NOT NULL,
-    dst_domain  text,
-    dst_port    integer     NOT NULL,
-    protocol    smallint    NOT NULL,
-    bytes       bigint      NOT NULL,
-    packets     bigint      NOT NULL,
-    flow_count  bigint      NOT NULL,
-    PRIMARY KEY (hour, src_ip, dst_ip, dst_port, protocol)
-) PARTITION BY RANGE (hour);
+-- True for RFC1918 private addresses (the LAN side of a connection).
+CREATE OR REPLACE FUNCTION is_private(addr inet) RETURNS boolean AS $$
+    SELECT addr << inet '10.0.0.0/8'
+        OR addr << inet '172.16.0.0/12'
+        OR addr << inet '192.168.0.0/16';
+$$ LANGUAGE sql IMMUTABLE;
 
--- Migration for deployments created before the mac column existed.
-ALTER TABLE flows_hourly ADD COLUMN IF NOT EXISTS mac text;
+-- Hourly aggregates: partitioned by month, 6-month retention. Main analysis table.
+-- One row per connection: both NetFlow directions are folded onto the LAN
+-- endpoint (device_ip) talking to the external endpoint (remote_ip).
+CREATE TABLE IF NOT EXISTS flows_hourly (
+    hour          timestamptz NOT NULL,
+    device_ip     inet        NOT NULL,
+    device_name   text,
+    mac           text,
+    remote_ip     inet        NOT NULL,
+    remote_domain text,
+    remote_port   integer     NOT NULL,
+    protocol      smallint    NOT NULL,
+    bytes         bigint      NOT NULL,
+    packets       bigint      NOT NULL,
+    flow_count    bigint      NOT NULL,
+    PRIMARY KEY (hour, device_ip, remote_ip, remote_port, protocol)
+) PARTITION BY RANGE (hour);
 
 -- Aggregation watermark.
 CREATE TABLE IF NOT EXISTS agg_state (
@@ -60,12 +66,10 @@ CREATE TABLE IF NOT EXISTS agg_state (
     last_hour timestamptz
 );
 
--- Dropped and recreated (rather than CREATE OR REPLACE) so the mac column can
--- sit next to device_name instead of only at the end.
 DROP VIEW IF EXISTS v_connections;
 CREATE VIEW v_connections AS
-SELECT hour, src_ip, device_name, mac, dst_ip, dst_domain, dst_port, protocol,
-       bytes, packets, flow_count
+SELECT hour, device_name, mac, device_ip, remote_domain, remote_ip,
+       remote_port, protocol, bytes, packets, flow_count
 FROM flows_hourly;
 
 CREATE OR REPLACE FUNCTION ensure_daily_partition(day date) RETURNS void AS $$
