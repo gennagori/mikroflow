@@ -36,11 +36,22 @@ docker compose version           # проверка
 Сначала слей PR в ветку `master`, затем клонируй её на сервер.
 
 Репозиторий приватный, поэтому серверу нужен доступ к GitHub. Самый простой
-способ — Personal Access Token (scope `repo`) в URL клонирования:
+способ — Personal Access Token (scope `repo`) в URL клонирования.
+
+Каталог `/opt` принадлежит root, поэтому сначала создай папку с `sudo` и
+передай её своему пользователю, затем клонируй **без** `sudo`:
 
 ```bash
-sudo mkdir -p /opt && cd /opt
-git clone https://<TOKEN>@github.com/Aleksandovm/mikroflow.git
+sudo mkdir -p /opt/mikroflow
+sudo chown "$USER":"$USER" /opt/mikroflow
+git clone https://<TOKEN>@github.com/Aleksandovm/mikroflow.git /opt/mikroflow
+cd /opt/mikroflow
+```
+
+Либо проще — клонировать в домашнюю папку (там права уже твои):
+
+```bash
+cd ~ && git clone https://<TOKEN>@github.com/Aleksandovm/mikroflow.git
 cd mikroflow
 ```
 
