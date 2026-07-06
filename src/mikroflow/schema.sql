@@ -154,6 +154,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Postgres refuses to CREATE OR REPLACE a function if a parameter name
+-- changes (hourly_days -> processed_days here), so drop the old signature
+-- explicitly first. Safe/no-op on fresh databases (IF EXISTS).
+DROP FUNCTION IF EXISTS drop_old_partitions(int, int);
+
 CREATE OR REPLACE FUNCTION drop_old_partitions(raw_days int, processed_days int)
 RETURNS void AS $$
 DECLARE
