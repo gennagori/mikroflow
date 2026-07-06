@@ -8,4 +8,4 @@ def test_scheduler_registers_all_jobs():
     pool = MagicMock()
     sched = build_scheduler(pool, Settings())
     names = {job.name for job in sched.get_jobs()}
-    assert names == {"lease_sync", "arp_sync", "rdns", "aggregate", "maintenance"}
+    assert names == {"lease_sync", "arp_sync", "rdns", "process", "maintenance"}

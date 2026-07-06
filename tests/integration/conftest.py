@@ -19,7 +19,7 @@ def pool(pg_container):
     with p.connection() as conn:
         conn.execute(
             "TRUNCATE flows_raw, dhcp_leases, arp, device_alias, ip_domain, "
-            "flows_hourly, agg_state"
+            "flows_processed, agg_state"
         )
     yield p
     p.close()

@@ -6,5 +6,5 @@ def run_maintenance(pool, settings):
         )
         conn.execute(
             "SELECT drop_old_partitions(%s, %s)",
-            (settings.raw_retention_days, settings.hourly_retention_days),
+            (settings.raw_retention_days, settings.processed_retention_days),
         )

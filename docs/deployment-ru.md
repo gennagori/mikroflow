@@ -78,7 +78,7 @@ MIKROFLOW_ROUTER_USER=netflow             # read-only API-юзер (см. шаг
 MIKROFLOW_ROUTER_PASSWORD=<сильный_пароль>
 MIKROFLOW_ROUTER_PORT=8728
 MIKROFLOW_RAW_RETENTION_DAYS=14
-MIKROFLOW_HOURLY_RETENTION_DAYS=180
+MIKROFLOW_PROCESSED_RETENTION_DAYS=180
 ```
 
 **Важно про пароль БД.** В `docker-compose.yml` пароль Postgres по умолчанию
@@ -124,14 +124,15 @@ docker compose exec postgres psql -U mikroflow -d mikroflow \
 docker compose exec postgres psql -U mikroflow -d mikroflow \
   -c "SELECT count(*) FROM arp;"
 
-# покрытие именами/MAC в агрегатах
+# покрытие именами/MAC в обработанных флоу
 docker compose exec postgres psql -U mikroflow -d mikroflow \
-  -c "SELECT count(*) total, count(device_name) named, count(mac) macd FROM flows_hourly;"
+  -c "SELECT count(*) total, count(device_name) named, count(mac) macd FROM flows_processed;"
 ```
 
 Тайминги наполнения: `flows_raw` — сразу; `dhcp_leases`/`arp` — после первого
-опроса роутера (каждые 5 мин); `v_connections` — после первого полного часа
-(агрегатор идёт каждые 5 мин).
+опроса роутера (каждые 5 мин); `v_connections`/`flows_processed` — в течение
+нескольких минут после появления сырых флоу (обработчик идёт каждые 5 мин и
+копирует их построчно, с точным исходным временем, без свёртки по часам).
 
 # 7. Анализ данных
 
@@ -195,11 +196,15 @@ Postgres опубликован только на **loopback сервера** (`
   API MikroTik (8728) — исходящий с сервера. Порт 5432 наружу не открывай.
 - **Данные переживают перезапуск:** Postgres в volume `pgdata`, стек с
   `restart: unless-stopped`. Партиции и миграции схемы применяются автоматически
-  при старте; ретеншн (raw — 14 дней, hourly — 180 дней) чистит воркер.
+  при старте; ретеншн (raw — 14 дней, processed — 180 дней) чистит воркер.
 - **Бэкап:**
   `docker compose exec postgres pg_dump -U mikroflow mikroflow > backup.sql`.
-- **Объём:** при ~500 флоу/сек сырьё за 14 дней — сотни ГБ. Если диск ограничен,
-  снизь `MIKROFLOW_RAW_RETENTION_DAYS` (напр. до 3–7). Следи за `df -h`.
+- **Объём:** при ~500 флоу/сек сырьё за 14 дней — сотни ГБ. `flows_processed`
+  хранит те же флоу построчно (без свёртки по часам), только с добавленными
+  device_name/mac/remote_domain, так что её объём за 180 дней сопоставим по
+  плотности с сырыми данными за тот же период — учитывай это при планировании
+  диска. Если диск ограничен, снизь `MIKROFLOW_RAW_RETENTION_DAYS` (напр. до
+  3–7) и/или `MIKROFLOW_PROCESSED_RETENTION_DAYS`. Следи за `df -h`.
 - **Тюнинг под нагрузку:** при пропусках подними `MIKROFLOW_RECV_BUFFER_BYTES`
   и `MIKROFLOW_BATCH_SIZE` в `.env`.
 - **Reverse-DNS:** домены CDN могут не резолвиться — принятое ограничение

@@ -32,10 +32,10 @@ class Settings(BaseSettings):
     rdns_negative_ttl_seconds: int = 3_600
     rdns_poll_seconds: int = 60
 
-    # aggregation and retention
-    aggregate_seconds: int = 300
+    # processing and retention
+    process_seconds: int = 300
     raw_retention_days: int = 14
-    hourly_retention_days: int = 180
+    processed_retention_days: int = 180
     partition_days_ahead: int = 3
     partition_months_ahead: int = 2
 

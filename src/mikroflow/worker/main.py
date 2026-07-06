@@ -2,9 +2,9 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from mikroflow.config import get_settings
 from mikroflow.db import apply_schema, make_pool
-from mikroflow.worker.aggregator import aggregate
 from mikroflow.worker.arp import fetch_arp, normalize_arp, sync_arp
 from mikroflow.worker.lease_sync import fetch_leases, normalize_leases, sync_leases
+from mikroflow.worker.processor import process
 from mikroflow.worker.rdns import resolve_pending
 from mikroflow.worker.retention import run_maintenance
 
@@ -27,8 +27,8 @@ def build_scheduler(pool, s):
                   seconds=s.arp_sync_seconds, id="arp_sync", name="arp_sync")
     sched.add_job(lambda: resolve_pending(pool, s), "interval",
                   seconds=s.rdns_poll_seconds, id="rdns", name="rdns")
-    sched.add_job(lambda: aggregate(pool), "interval",
-                  seconds=s.aggregate_seconds, id="aggregate", name="aggregate")
+    sched.add_job(lambda: process(pool), "interval",
+                  seconds=s.process_seconds, id="process", name="process")
     sched.add_job(lambda: run_maintenance(pool, s), "interval",
                   hours=1, id="maintenance", name="maintenance")
     return sched

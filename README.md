@@ -2,7 +2,7 @@
 
 Collects NetFlow v9 from a MikroTik router into PostgreSQL, enriched with device
 names (DHCP) and destination domains (reverse-DNS). Raw flows are kept ~14 days,
-hourly aggregates 6 months.
+processed flows (enriched, per-flow, nothing aggregated) 180 days.
 
 ## MikroTik setup
 
@@ -25,15 +25,28 @@ docker compose up -d --build
 
 Query the `v_connections` view:
 
-Each row is one connection (both NetFlow directions folded onto the LAN
-device): `device_name`/`mac`/`device_ip` is the local host, `remote_domain`/
-`remote_ip`/`remote_port` is who it talked to, `bytes` counts both directions.
+Each row is one flow exactly as received (nothing folded, grouped, or
+summed — every flow keeps its own `ts` down to the second):
+`device_name`/`mac`/`device_ip` is the local host, `remote_domain`/
+`remote_ip`/`remote_port` is who it talked to.
 
 ```sql
-SELECT hour, device_name, mac, device_ip, remote_domain, remote_ip,
-       remote_port, bytes, flow_count
+SELECT ts, device_name, mac, device_ip, remote_domain, remote_ip,
+       remote_port, bytes, packets
 FROM v_connections
-WHERE hour >= now() - interval '7 days'
+WHERE ts >= now() - interval '7 days'
+ORDER BY bytes DESC
+LIMIT 100;
+```
+
+If you want hourly (or any other interval) totals, aggregate on the fly:
+
+```sql
+SELECT date_trunc('hour', ts) AS hour, device_name, remote_domain,
+       sum(bytes) AS bytes, count(*) AS flow_count
+FROM v_connections
+WHERE ts >= now() - interval '7 days'
+GROUP BY 1, 2, 3
 ORDER BY bytes DESC
 LIMIT 100;
 ```
