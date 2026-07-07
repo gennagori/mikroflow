@@ -1,11 +1,14 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 # Copies each flow from flows_raw into flows_processed as-is (same columns,
 # same one-row-per-flow granularity, original ts untouched) and adds three
 # enrichment columns: device_name/mac for whichever side of the flow is the
-# LAN endpoint, and remote_domain (reverse-DNS) for the other side. Unlike
-# the old hourly aggregator, nothing is grouped or summed, so no time
-# information is lost.
+# LAN endpoint, and remote_domain (reverse-DNS) for the other side. Nothing
+# is grouped or summed, so no time information is lost. Because there is no
+# aggregation, there is also no need to wait for an hour to "close" before
+# processing it (that constraint only applied to the old hourly aggregator,
+# which had to see a full hour before it could sum it) -- each run simply
+# copies everything newer than the watermark, up to "now".
 _PROCESS_SQL = """
 INSERT INTO flows_processed
     (ts, src_ip, dst_ip, src_port, dst_port, protocol, bytes, packets,
@@ -50,13 +53,12 @@ LEFT JOIN LATERAL (
 LEFT JOIN arp a ON a.ip = o.device_ip
 LEFT JOIN device_alias al ON upper(al.mac) = upper(coalesce(l.mac, a.mac))
 LEFT JOIN ip_domain d ON d.ip = o.remote_ip
-WHERE f.ts >= %(hour)s AND f.ts < %(hour)s + interval '1 hour'
+WHERE f.ts >= %(start)s AND f.ts < %(end)s
 """
 
 
 def process(pool, now=None):
     now = now or datetime.now(timezone.utc)
-    boundary = now.replace(minute=0, second=0, microsecond=0)
     with pool.connection() as conn:
         row = conn.execute(
             "SELECT last_hour FROM agg_state WHERE name = 'processed'"
@@ -64,17 +66,16 @@ def process(pool, now=None):
         last = row[0] if row else None
         if last is None:
             first = conn.execute(
-                "SELECT date_trunc('hour', min(ts)) FROM flows_raw"
+                "SELECT min(ts) FROM flows_raw"
             ).fetchone()[0]
             if first is None:
                 return
             last = first
-        hour = last
-        while hour < boundary:
-            conn.execute(_PROCESS_SQL, {"hour": hour})
-            hour = hour + timedelta(hours=1)
-            conn.execute(
-                "INSERT INTO agg_state (name, last_hour) VALUES ('processed', %s) "
-                "ON CONFLICT (name) DO UPDATE SET last_hour = EXCLUDED.last_hour",
-                (hour,),
-            )
+        if last >= now:
+            return
+        conn.execute(_PROCESS_SQL, {"start": last, "end": now})
+        conn.execute(
+            "INSERT INTO agg_state (name, last_hour) VALUES ('processed', %s) "
+            "ON CONFLICT (name) DO UPDATE SET last_hour = EXCLUDED.last_hour",
+            (now,),
+        )
